@@ -4,7 +4,6 @@ import com.alibaba.fastjson.JSONObject;
 
 import java.io.Serializable;
 
-import javax.annotation.Resource;
 
 /**
  * @author : 00222 [liu.yang@unisinsight.com]

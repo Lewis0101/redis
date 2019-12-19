@@ -1,137 +1,116 @@
 package com.lewis.config;
 
-import org.springframework.beans.factory.annotation.Value;
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.PropertyAccessor;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.cache.annotation.CachingConfigurerSupport;
+import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
-import org.springframework.data.redis.connection.jedis.JedisConnectionFactory;
-import org.springframework.data.redis.core.RedisConnectionUtils;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.core.*;
+import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
-import org.springframework.stereotype.Component;
-
-import redis.clients.jedis.JedisPoolConfig;
 
 /**
- * @author : 00222 [liu.yang@unisinsight.com]
- * @description: redis初始化配置
- * @date : 2019/10/22 11:02
- * @since: 1.0
+ * redis配置类
+ * @program: springbootdemo
+ * @Date: 2019/1/25 15:20
+ * @Author: Mr.Zheng
+ * @Description:
  */
-@Component
-public class RedisConfig {
-    @Value("${redis.maxIdle}")
-    private Integer maxIdle;
-
-    @Value("${redis.maxTotal}")
-    private Integer maxTotal;
-
-    @Value("${redis.maxWaitMillis}")
-    private Integer maxWaitMillis;
-
-    @Value("${redis.minEvictableIdleTimeMillis}")
-    private Integer minEvictableIdleTimeMillis;
-
-    @Value("${redis.numTestsPerEvictionRun}")
-    private Integer numTestsPerEvictionRun;
-
-    @Value("${redis.timeBetweenEvictionRunsMillis}")
-    private long timeBetweenEvictionRunsMillis;
-
-    @Value("${redis.testOnBorrow}")
-    private boolean testOnBorrow;
-
-    @Value("${redis.testWhileIdle}")
-    private boolean testWhileIdle;
-
-    @Value("${redis.cluster.max-redirects}")
-    private Integer mmaxRedirectsac;
-
-    @Value("${redis.password}")
-    private String redispwd;
+@Configuration
+@EnableCaching //开启注解
+public class RedisConfig extends CachingConfigurerSupport {
 
     /**
-     * JedisPoolConfig 连接池
-     *
+     * retemplate相关配置
+     * @param factory
      * @return
      */
     @Bean
-    public JedisPoolConfig jedisPoolConfig() {
-        JedisPoolConfig jedisPoolConfig = new JedisPoolConfig();
-        // 最大空闲数
-        jedisPoolConfig.setMaxIdle(maxIdle);
-        // 连接池的最大数据库连接数
-        jedisPoolConfig.setMaxTotal(maxTotal);
-        // 最大建立连接等待时间
-        jedisPoolConfig.setMaxWaitMillis(maxWaitMillis);
-        // 逐出连接的最小空闲时间 默认1800000毫秒(30分钟)
-        jedisPoolConfig.setMinEvictableIdleTimeMillis(minEvictableIdleTimeMillis);
-        // 每次逐出检查时 逐出的最大数目 如果为负数就是 : 1/abs(n), 默认3
-        jedisPoolConfig.setNumTestsPerEvictionRun(numTestsPerEvictionRun);
-        // 逐出扫描的时间间隔(毫秒) 如果为负数,则不运行逐出线程, 默认-1
-        jedisPoolConfig.setTimeBetweenEvictionRunsMillis(timeBetweenEvictionRunsMillis);
-        // 是否在从池中取出连接前进行检验,如果检验失败,则从池中去除连接并尝试取出另一个
-        jedisPoolConfig.setTestOnBorrow(testOnBorrow);
-        // 在空闲时检查有效性, 默认false
-        jedisPoolConfig.setTestWhileIdle(testWhileIdle);
-        return jedisPoolConfig;
+    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory factory) {
+
+        RedisTemplate<String, Object> template = new RedisTemplate<>();
+        // 配置连接工厂
+        template.setConnectionFactory(factory);
+
+        //使用Jackson2JsonRedisSerializer来序列化和反序列化redis的value值（默认使用JDK的序列化方式）
+        Jackson2JsonRedisSerializer jacksonSeial = new Jackson2JsonRedisSerializer(Object.class);
+
+        ObjectMapper om = new ObjectMapper();
+        // 指定要序列化的域，field,get和set,以及修饰符范围，ANY是都有包括private和public
+        om.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
+        // 指定序列化输入的类型，类必须是非final修饰的，final修饰的类，比如String,Integer等会跑出异常
+        om.enableDefaultTyping(ObjectMapper.DefaultTyping.NON_FINAL);
+        jacksonSeial.setObjectMapper(om);
+
+        // 值采用json序列化
+        template.setValueSerializer(jacksonSeial);
+        //使用StringRedisSerializer来序列化和反序列化redis的key值
+        template.setKeySerializer(new StringRedisSerializer());
+
+        // 设置hash key 和value序列化模式
+        template.setHashKeySerializer(new StringRedisSerializer());
+        template.setHashValueSerializer(jacksonSeial);
+        template.afterPropertiesSet();
+
+        return template;
     }
 
     /**
-     * 配置工厂
-     */
-    @Bean
-    public JedisConnectionFactory JedisConnectionFactory(JedisPoolConfig jedisPoolConfig) {
-        JedisConnectionFactory JedisConnectionFactory = new JedisConnectionFactory(jedisPoolConfig);
-        if (redispwd == null || redispwd.length() == 0) {
-            JedisConnectionFactory.setPassword(redispwd);
-        }
-        return JedisConnectionFactory;
-    }
-
-
-
-    /**
-     * 设置数据存入 redis 的序列化方式,并开启事务
+     * 对hash类型的数据操作
      *
      * @param redisTemplate
-     * @param factory
-     */
-    private void initDomainRedisTemplate(RedisTemplate<String, Object> redisTemplate, RedisConnectionFactory factory) {
-        /*
-         * 设置 序列化器 .
-         * 如果不设置，那么在用实体类(未序列化)进行存储的时候，会提示错误: Failed to serialize object using DefaultSerializer;
-         */
-        redisTemplate.setKeySerializer(new StringRedisSerializer());
-        redisTemplate.setHashKeySerializer(new StringRedisSerializer());
-        redisTemplate.setHashValueSerializer(new GenericJackson2JsonRedisSerializer());
-        redisTemplate.setValueSerializer(new GenericJackson2JsonRedisSerializer());
-        // 开启事务
-        redisTemplate.setEnableTransactionSupport(true);
-        // 将连接工厂设置到模板类中
-        redisTemplate.setConnectionFactory(factory);
-    }
-
-    /**
-     * 实例化 RedisTemplate 对象
      * @return
      */
     @Bean
-    public RedisTemplate<String, Object> functionDomainRedisTemplate(RedisConnectionFactory redisConnectionFactory) {
-        RedisTemplate<String, Object> redisTemplate = new RedisTemplate<>();
-        initDomainRedisTemplate(redisTemplate, redisConnectionFactory);
-        return redisTemplate;
+    public HashOperations<String, String, Object> hashOperations(RedisTemplate<String, Object> redisTemplate) {
+        return redisTemplate.opsForHash();
     }
 
+    /**
+     * 对redis字符串类型数据操作
+     *
+     * @param redisTemplate
+     * @return
+     */
+    @Bean
+    public ValueOperations<String, Object> valueOperations(RedisTemplate<String, Object> redisTemplate) {
+        return redisTemplate.opsForValue();
+    }
 
+    /**
+     * 对链表类型的数据操作
+     *
+     * @param redisTemplate
+     * @return
+     */
+    @Bean
+    public ListOperations<String, Object> listOperations(RedisTemplate<String, Object> redisTemplate) {
+        return redisTemplate.opsForList();
+    }
 
+    /**
+     * 对无序集合类型的数据操作
+     *
+     * @param redisTemplate
+     * @return
+     */
+    @Bean
+    public SetOperations<String, Object> setOperations(RedisTemplate<String, Object> redisTemplate) {
+        return redisTemplate.opsForSet();
+    }
 
-
-
-
-
-
-
-
+    /**
+     * 对有序集合类型的数据操作
+     *
+     * @param redisTemplate
+     * @return
+     */
+    @Bean
+    public ZSetOperations<String, Object> zSetOperations(RedisTemplate<String, Object> redisTemplate) {
+        return redisTemplate.opsForZSet();
+    }
 
 }
