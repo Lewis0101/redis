@@ -18,7 +18,6 @@
     <properties>
         <java.version>1.8</java.version>
         <fastjson>1.2.41</fastjson>
-        <springboot>3.2.100.RELEASE</springboot>
     </properties>
 
     <dependencies>
@@ -46,6 +45,7 @@
             <version>${springboot}</version>
         </dependency>
 
+        <!--redis依赖-->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
@@ -60,7 +60,6 @@
         <dependency>
             <groupId>org.springframework.data</groupId>
             <artifactId>spring-data-redis</artifactId>
-            <version>2.2.0.RELEASE</version>
         </dependency>
 
 
