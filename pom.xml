@@ -17,7 +17,7 @@
 
     <properties>
         <java.version>1.8</java.version>
-        <fastjson>1.2.4</fastjson>
+        <fastjson>1.2.25</fastjson>
         <springboot>3.2.100.RELEASE</springboot>
         <thymeleaf.version>3.0.2.RELEASE</thymeleaf.version>
         <thymeleaf-layout-dialect.version>2.0.5</thymeleaf-layout-dialect.version>
